@@ -1,0 +1,5 @@
+numpy==1.6.2
+scipy==0.11.0
+-e git://github.com/pybrain/pybrain.git@a8ae0db137bc05d881b9bca0ef6af9eae3afba45#egg=PyBrain-dev
+
+bpython
