@@ -1,39 +1,64 @@
+# -*- coding: utf-8 -*-
 '''
 Created on 22/11/2012
 
 @author: arruda
 '''
+from pybrain.datasets            import ClassificationDataSet
+from pybrain.utilities           import percentError
+from pybrain.tools.shortcuts     import buildNetwork
+from pybrain.supervised.trainers import BackpropTrainer
+from pybrain.structure.modules   import SoftmaxLayer
 
-from pybrain.structure import FeedForwardNetwork, LinearLayer, SigmoidLayer, FullConnection
+from scipy import diag, arange, meshgrid, where
+from numpy.random import multivariate_normal
 
-def simple_ffn():
-    "make a simple feed forward network"
+def classif():
+    means = [(-1,0),(2,4),(3,1)]
+    cov = [diag([1,1]), diag([0.5,1.2]), diag([1.5,0.7])]
+    alldata = ClassificationDataSet(2, 1, nb_classes=3)
+    for n in xrange(400):
+        for klass in range(3):
+            input = multivariate_normal(means[klass],cov[klass])
+            alldata.addSample(input, [klass])    
+            
+    tstdata, trndata = alldata.splitWithProportion( 0.25 )
     
-    n = FeedForwardNetwork()
+    trndata._convertToOneOfMany( )
+    tstdata._convertToOneOfMany( )
     
-    inLayer = LinearLayer(2)
-    hiddenLayer = SigmoidLayer(3)
-    outLayer = LinearLayer(1)
+    print "Number of training patterns: ", len(trndata)
+    print "Input and output dimensions: ", trndata.indim, trndata.outdim
+    print "First sample (input, target, class):"
+    print trndata['input'][0], trndata['target'][0], trndata['class'][0]
+    fnn = buildNetwork( trndata.indim, 5, trndata.outdim, outclass=SoftmaxLayer )
+    trainer = BackpropTrainer( fnn, dataset=trndata, momentum=0.1, verbose=True, weightdecay=0.01)
+    ticks = arange(-3.,6.,0.2)
+    X, Y = meshgrid(ticks, ticks)
+    # need column vectors in dataset, not arrays
+    griddata = ClassificationDataSet(2,1, nb_classes=3)
+    for i in xrange(X.size):
+        griddata.addSample([X.ravel()[i],Y.ravel()[i]], [0])
+    griddata._convertToOneOfMany()  # this is still needed to make the fnn feel comfy
     
-    n.addInputModule(inLayer)
-    n.addModule(hiddenLayer)
-    n.addOutputModule(outLayer)
+    for i in range(20):
+        trainer.trainEpochs( 5 )
+        
+        trnresult = percentError( trainer.testOnClassData(),
+                                  trndata['class'] )
+        tstresult = percentError( trainer.testOnClassData(
+               dataset=tstdata ), tstdata['class'] )
     
-    n.addConnection(FullConnection(inLayer,hiddenLayer))
-    n.addConnection(FullConnection(hiddenLayer,outLayer))
-    
-    n.sortModules()
-    
-#    print n
-    
-#    print n.activate([1, 2])
-    for k,v in n.connections.items():
-        for c in v:
-            print c.name, c.params 
-    
-    print n.params
-    
+        print "epoch: %4d" % trainer.totalepochs, \
+              "  train error: %5.2f%%" % trnresult, \
+              "  test error: %5.2f%%" % tstresult
+              
+        out = fnn.activateOnDataset(griddata)
+        out = out.argmax(axis=1)  # the highest output activation gives the class
+        out = out.reshape(X.shape)        
+        print out
+        
 if __name__ == '__main__':
-    simple_ffn()
+    classif()
     
     
